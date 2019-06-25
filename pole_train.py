@@ -37,7 +37,7 @@ eps_end = 0.05
 eps_anneal_period = 30
 N_epochs = 1
 Size_minibatch = 128
-net_update_period = 10000//Size_minibatch
+net_update_period = 1000//Size_minibatch
 gamma = 0.999
 net_save_path = 'net.pth'
 plot_save_path = 'running_score.png'
@@ -53,7 +53,7 @@ net_.load_state_dict(net.state_dict())
 net_.eval()
 # loss_function = torch.nn.MSELoss()
 loss_function = torch.nn.SmoothL1Loss()
-optimizer = torch.optim.Adam(net.parameters())
+optimizer = torch.optim.RMSprop(net.parameters())
 
 replay_buffer = ReplayBuffer(Size_replay_buffer, keys=['x', 'a', 'r', 'x_next'])
 env = gym.make('CartPole-v0')
@@ -67,11 +67,12 @@ for iter in range(N_iters):
     # collect experience
     with torch.no_grad():
         net.eval()
-        s = env.reset()
+        s_cur = env.reset()
+        s_prev = s_cur
         score = 0
         for step in range(N_steps_per_iter):
             # env.render()
-            x = torch.from_numpy(s).float()
+            x = torch.from_numpy(np.concatenate((s_cur, s_prev))).float()
             x = x.to(device)
             if np.random.rand() < eps:
                 action = np.random.randint(2)
@@ -82,19 +83,23 @@ for iter in range(N_iters):
             if done:
                 r = 0
             score += r
-            x_next = torch.from_numpy(s_next).float()
+            x_next = torch.from_numpy(np.concatenate((s_next, s_cur))).float()
             replay_buffer.append((x, action, r, x_next))
             if done:
                 running_score = 0.99*running_score + 0.01*score
                 score = 0
-                s = env.reset()
+                s_cur = env.reset()
+                s_prev = s_cur
+            else:
+                s_prev = s_cur
+                s_cur = s_next
 
         if eps > eps_end:
             eps -= (eps_start-eps_end)/eps_anneal_period
 
     # find mean and std of rewards - to make rewards zero mean and unit std for training
-    r_mean = np.mean(replay_buffer.dict['r'])
-    r_std = np.std(replay_buffer.dict['r'])
+    # r_mean = np.mean(replay_buffer.dict['r'])
+    # r_std = np.std(replay_buffer.dict['r'])
     # train
     net.train()
     for epoch in range(N_epochs):
@@ -107,9 +112,9 @@ for iter in range(N_iters):
             next_xs = torch.stack(next_xs).to(device)
             # normalize rewards
             rs = np.array(rs)
-            rs = (rs - r_mean)/(r_std + 1e-8)
+            final_state_ids = np.nonzero(rs == 0)  # will be needed to calculate target for final states properly
+            # rs = (rs - r_mean)/(r_std + 1e-8)
             rs = torch.from_numpy(rs).float()
-
 
             # finding targets by double DQN method
             with torch.no_grad():
@@ -122,7 +127,7 @@ for iter in range(N_iters):
             Q_max, Q_argmax = torch.max(Q_snext_anext, 1)
 
             Q_target = torch.gather(Q_snext_anext_, 1, Q_argmax.view(-1, 1)).squeeze()
-
+            Q_target[final_state_ids] = 0
             targets = (rs.to(device) + gamma*Q_target).to(device)
             # backprop only on actions that actually occured at corresonding states
             actions = torch.tensor(actions).view(-1, 1)
@@ -134,7 +139,6 @@ for iter in range(N_iters):
 
             if (mb_i+1) % net_update_period == 0:
                 net_.load_state_dict(net.state_dict())
-
 
     running_score_history.append(running_score)
     print("iter: {}, time: {:.2f}s, running_loss: {}, running_score: {}".format(iter, time.time()-t0,
