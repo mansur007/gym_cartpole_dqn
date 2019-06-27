@@ -6,9 +6,8 @@ import torch.nn.functional as F
 class Q_net(nn.Module):
     def __init__(self):
         super().__init__()
-        h = 24
+        h = 64
         self.fc1 = nn.Linear(8, h)
-        # self.bn1 = nn.BatchNorm1d(h)
         self.fc2 = nn.Linear(h, h)
         # self.bn2 = nn.BatchNorm1d(h)
         self.fc3 = nn.Linear(h, 2)
@@ -16,7 +15,6 @@ class Q_net(nn.Module):
 
     def forward(self, x):
         x = F.relu(self.fc1(x))
-        # x = self.bn1(x)
         x = F.relu(self.fc2(x))
         # x = self.bn2(x)
         q = F.relu(self.fc3(x))
