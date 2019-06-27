@@ -107,6 +107,7 @@ for ep in count():
         replay_buffer.append((x, action, r, x_next))
         if done:
             running_score = score if running_score == 0 else 0.99*running_score + 0.01*score
+            running_score_history.append(running_score)
             score = 0
             s_cur = env.reset()
             s_prev = s_cur
@@ -168,7 +169,6 @@ for ep in count():
             # else:  ## useless
             #     net.load_state_dict(net_.state_dict())  ## useless
 
-        running_score_history.append(running_score)
         if done and ep_played % 100 == 0:
             print("ep: {}, buf_len: {}, eps: {:.3f}, time: {:.2f}s, running_loss: {:.3f}, running_score: {:.1f}".
                   format(ep_played, len(replay_buffer), eps, time.time()-t0,
@@ -181,6 +181,8 @@ for ep in count():
         if done and ep_played % 100 == 0:
             plt.close('all')
             plt.plot(running_score_history)
+            plt.xlabel('episodes')
+            plt.ylabel('running score')
             plt.savefig(plot_save_path)
         if done:
             break
