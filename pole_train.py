@@ -29,15 +29,16 @@ class ReplayBuffer:
             sub_dict[key] = [self.dict[key][i] for i in ids]
         return sub_dict
 
+
 ## hyperparameters
-env_version = 0
+N_episodes = 3000  # for how many episodes to train
+env_version = 1  # cartpole version 0 or 1
 if env_version == 1:
     T_max = 499  # latest step that environment allows, starting from 0
 elif env_version == 0:
     T_max = 199
 else:
     assert False, "wrong env_version, should be 0 or 1 (integer)"
-
 method = 'double'  # method for evaluating the targets, only double and single(vanilla) are possible
 # method = 'single'
 Size_replay_buffer = 100000  # in time steps
@@ -79,9 +80,8 @@ running_score_best = 0  # network will be saved only if it exceeds previous best
 s_cur = env.reset()
 s_prev = s_cur
 score = 0  # score per episode
-ep_played = 0  # number of episodes played so far
 t0 = time.time()
-for ep in count():
+for ep in range(N_episodes):
     for step in range(T_max+2):
         # choose an action:
         x = torch.from_numpy(np.concatenate((s_cur, s_cur-s_prev))).float()
@@ -111,7 +111,6 @@ for ep in count():
             score = 0
             s_cur = env.reset()
             s_prev = s_cur
-            ep_played += 1
         else:
             s_prev = s_cur
             s_cur = s_next
@@ -168,7 +167,7 @@ for ep in count():
             net_.load_state_dict(net.state_dict())
             # else:  ## useless
             #     net.load_state_dict(net_.state_dict())  ## useless
-
+        ep_played = ep + 1
         if done and ep_played % 100 == 0:
             print("ep: {}, buf_len: {}, eps: {:.3f}, time: {:.2f}s, running_loss: {:.3f}, running_score: {:.1f}".
                   format(ep_played, len(replay_buffer), eps, time.time()-t0,
