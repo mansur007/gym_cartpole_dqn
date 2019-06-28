@@ -11,8 +11,8 @@ Passing criterion for cartpole v0: average score on last 100 training episodes i
 Passing criterion for cartpole v1: average score on last 100 training episodes is above 475
 
 Performance at test time, provided successful training, with both DQN and DDQN:  
-v0: always 200, and maximum limit of the environment is 200  
-v1: always 500, and maximum limit of the environment is 500
+v0: always 200 (maximum limit of the environment is 200)  
+v1: always 500 (maximum limit of the environment is 500)
 
 **Note**: successful training might be achieved in about 1-4 trials. So if training fails - please try again
 
