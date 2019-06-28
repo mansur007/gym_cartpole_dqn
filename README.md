@@ -5,7 +5,7 @@ by Vincent François-Lavet, Peter Henderson, Riashat Islam, Marc G. Bellemare an
 DQN - section 4.3  
 DDQN - section 4.4
 
-**Training and Test Performance**
+**Training and Test Performance**  
 Passes both cartpole v0 and cartpole v1 with both DQN and DDQN.  
 Passing criterion for cartpole v0: average score on last 100 training episodes is above 195  
 Passing criterion for cartpole v1: average score on last 100 training episodes is above 475
