@@ -1,6 +1,5 @@
 import gym, torch, torch.optim
 import numpy as np, time
-from itertools import count
 import matplotlib.pyplot as plt
 from collections import deque
 
@@ -11,15 +10,12 @@ class ReplayBuffer:
     def __init__(self, max_size, keys):
         self.dict = {}
         for key in keys:
-            self.dict[key] = []  # creating empty list for each key
+            self.dict[key] = deque(maxlen=max_size)  # creating empty list for each key
         self.max_size = max_size
 
     def append(self, sample):
         for i, key in enumerate(self.dict.keys()):
             self.dict[key].append(sample[i])
-        if len(self) > self.max_size:
-            for key in self.dict.keys():
-                self.dict[key].pop(0)
 
     def __len__(self):
         return len(self.dict['x'])
@@ -31,10 +27,23 @@ class ReplayBuffer:
         return sub_dict
 
 
-## hyperparameters
+# hyperparameters
 N_episodes = 3000  # for how many episodes to train
-env_version = 0  # cartpole version 0 or 1
-method = 'double'  # method for evaluating the targets, only double and single(vanilla) are possible
+env_version = 1  # cartpole version 0 or 1
+method = 'double'  # method for evaluating the targets
+# method = 'single'
+learning_rate = 1e-4
+Size_replay_buffer = 50000  # in time steps
+eps_start = 1  # eps for epsilon greedy algorithm
+eps_end = 0.02
+eps_anneal_period = 10000  # simple linear annealing
+Size_minibatch = 32
+net_update_period = 500  # after how many minibatches should the target computing net be updated
+gamma = 1
+l2_regularization = 0  # L2 regularization coefficient
+net_save_path = 'net_cartpole-v{}_{}DQN.pth'.format(env_version, method)
+plot_save_path = 'running_score_cartpole-v{}_{}DQN.png'.format(env_version, method)
+device = "cuda"
 if env_version == 1:
     T_max = 499  # latest step that environment allows, starting from 0
     Pass_score = 475
@@ -43,19 +52,6 @@ elif env_version == 0:
     Pass_score = 195
 else:
     assert False, "wrong env_version, should be 0 or 1 (integer)"
-# method = 'single'
-Size_replay_buffer = 100000  # in time steps
-eps_start = 1  # eps for epsilon greedy algorithm
-eps_end = 0.01
-eps_anneal_period = 10000  # simple linear annealing
-Size_minibatch = 128
-net_update_period = 1000  # after how many minibatches should the target computing net be updated
-gamma = 0.99
-l2_regularization = 0  # L2 regularization coefficient
-net_save_path = 'net_cartpole-v{}_{}DQN.pth'.format(env_version, method)
-plot_save_path = 'running_score_cartpole-v{}_{}DQN.png'.format(env_version, method)
-device = "cuda"
-
 net = Q_net()  # net that determines policy to follow (except when randomly choosing actions during training)
 net.to(device)
 net_ = Q_net()  # net that computes the targets
@@ -65,7 +61,7 @@ net_.eval()
 # loss_function = torch.nn.MSELoss()
 loss_function = torch.nn.SmoothL1Loss()  # Huber loss
 # optimizer = torch.optim.RMSprop(net.parameters(), weight_decay=l2_regularization)
-optimizer = torch.optim.Adam(net.parameters(), weight_decay=l2_regularization)
+optimizer = torch.optim.Adam(net.parameters(), lr=learning_rate, weight_decay=l2_regularization)
 
 replay_buffer = ReplayBuffer(Size_replay_buffer, keys=['x', 'a', 'r', 'x_next', 'done'])
 
@@ -102,7 +98,7 @@ for ep in range(N_episodes):
             if step != T_max:
                 r = 0
             else:
-                r = 100
+                r = 10
         score += 1
         # store the experience
         x_next = torch.from_numpy(np.concatenate((s_next, s_next-s_cur))).float()
@@ -179,6 +175,11 @@ for ep in range(N_episodes):
             avg_score_best = np.mean(latest_scores)
             if avg_score_best > Pass_score:
                 print('latest 100 average score: {}, pass score: {}, test is passed'.format(avg_score_best, Pass_score))
+                plt.close('all')
+                plt.plot(avg_score_history)
+                plt.xlabel('episodes')
+                plt.ylabel('last 100 average score')
+                plt.savefig(plot_save_path)
                 exit(0)
             # print("net saved to '{}'".format(net_save_path))
 
