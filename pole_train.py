@@ -29,9 +29,9 @@ class ReplayBuffer:
 
 # hyperparameters
 N_episodes = 3000  # for how many episodes to train
-env_version = 1  # cartpole version 0 or 1
-method = 'double'  # method for evaluating the targets
-# method = 'single'
+env_version = 0  # cartpole version 0 or 1
+method = 'double'  # method for evaluating the targets; double stands for DDQN
+# method = 'vanilla'
 learning_rate = 1e-4
 Size_replay_buffer = 50000  # in time steps
 eps_start = 1  # eps for epsilon greedy algorithm
@@ -42,7 +42,7 @@ net_update_period = 500  # after how many minibatches should the target computin
 gamma = 1
 l2_regularization = 0  # L2 regularization coefficient
 net_save_path = 'net_cartpole-v{}_{}DQN.pth'.format(env_version, method)
-plot_save_path = 'running_score_cartpole-v{}_{}DQN.png'.format(env_version, method)
+plot_save_path = 'cartpole-v{}_{}DQN.png'.format(env_version, method)
 device = "cuda"
 if env_version == 1:
     T_max = 499  # latest step that environment allows, starting from 0
@@ -52,6 +52,11 @@ elif env_version == 0:
     Pass_score = 195
 else:
     assert False, "wrong env_version, should be 0 or 1 (integer)"
+
+# initializing nets.
+# "net" is used to choose actions for training, it is updated at each step
+# "net_" is a stable net(or target net) that is used for computing Q targets and it is
+# updated once in net_update_period steps
 net = Q_net()  # net that determines policy to follow (except when randomly choosing actions during training)
 net.to(device)
 net_ = Q_net()  # net that computes the targets
@@ -70,9 +75,9 @@ eps = eps_start
 
 backprops_total = 0  # to track when to update the target net
 
-# running_X is computed as: running_X = 0.99*running_X+0.01*X
-running_loss = 0  # score is the sum of rewards achieved in one episode
-avg_score_best = 0  # network will be saved only if mean of last 100 episodes exceeds previous best mean of 100
+running_loss = 0
+# score is a number of steps made within one episode
+avg_score_best = 0  # network will be saved only if a mean of last 100 episodes exceeds previous best mean of 100
 latest_scores = deque(maxlen=100)
 avg_score_history = []
 
@@ -103,6 +108,7 @@ for ep in range(N_episodes):
         # store the experience
         x_next = torch.from_numpy(np.concatenate((s_next, s_next-s_cur))).float()
         replay_buffer.append((x, action, r, x_next, done))
+
         if done:
             latest_scores.append(score)
             avg_score_history.append(np.mean(latest_scores))
