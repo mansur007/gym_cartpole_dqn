@@ -2,6 +2,7 @@ import gym, torch, torch.optim
 import numpy as np, time
 from itertools import count
 import matplotlib.pyplot as plt
+from collections import deque
 
 from pole_net import Q_net
 
@@ -32,14 +33,16 @@ class ReplayBuffer:
 
 ## hyperparameters
 N_episodes = 3000  # for how many episodes to train
-env_version = 1  # cartpole version 0 or 1
+env_version = 0  # cartpole version 0 or 1
+method = 'double'  # method for evaluating the targets, only double and single(vanilla) are possible
 if env_version == 1:
     T_max = 499  # latest step that environment allows, starting from 0
+    Pass_score = 475
 elif env_version == 0:
     T_max = 199
+    Pass_score = 195
 else:
     assert False, "wrong env_version, should be 0 or 1 (integer)"
-method = 'double'  # method for evaluating the targets, only double and single(vanilla) are possible
 # method = 'single'
 Size_replay_buffer = 100000  # in time steps
 eps_start = 1  # eps for epsilon greedy algorithm
@@ -51,7 +54,7 @@ gamma = 0.99
 l2_regularization = 0  # L2 regularization coefficient
 net_save_path = 'net_cartpole-v{}_{}DQN.pth'.format(env_version, method)
 plot_save_path = 'running_score_cartpole-v{}_{}DQN.png'.format(env_version, method)
-device = "cpu"
+device = "cuda"
 
 net = Q_net()  # net that determines policy to follow (except when randomly choosing actions during training)
 net.to(device)
@@ -64,18 +67,18 @@ loss_function = torch.nn.SmoothL1Loss()  # Huber loss
 # optimizer = torch.optim.RMSprop(net.parameters(), weight_decay=l2_regularization)
 optimizer = torch.optim.Adam(net.parameters(), weight_decay=l2_regularization)
 
-replay_buffer = ReplayBuffer(Size_replay_buffer, keys=['x', 'a', 'r', 'x_next'])
+replay_buffer = ReplayBuffer(Size_replay_buffer, keys=['x', 'a', 'r', 'x_next', 'done'])
 
 env = gym.make('CartPole-v'+str(env_version))
 eps = eps_start
-running_score_history = []
 
 backprops_total = 0  # to track when to update the target net
 
 # running_X is computed as: running_X = 0.99*running_X+0.01*X
-running_loss, running_score = 0, 0  # score is the sum of rewards achieved in one episode
-running_score_best = 0  # network will be saved only if it exceeds previous best running_score
-
+running_loss = 0  # score is the sum of rewards achieved in one episode
+avg_score_best = 0  # network will be saved only if mean of last 100 episodes exceeds previous best mean of 100
+latest_scores = deque(maxlen=100)
+avg_score_history = []
 
 s_cur = env.reset()
 s_prev = s_cur
@@ -97,17 +100,16 @@ for ep in range(N_episodes):
 
         if done:
             if step != T_max:
-                r = 0  # will be used during training to detect the terminal step
+                r = 0
             else:
-                # unnecessary, but I found it to give a bit better results compared to r=0 for any terminal step
-                r = 1  # if game stopped due to time steps limitation of environment - count like it didn't
-        score += r
+                r = 100
+        score += 1
         # store the experience
         x_next = torch.from_numpy(np.concatenate((s_next, s_next-s_cur))).float()
-        replay_buffer.append((x, action, r, x_next))
+        replay_buffer.append((x, action, r, x_next, done))
         if done:
-            running_score = score if running_score == 0 else 0.99*running_score + 0.01*score
-            running_score_history.append(running_score)
+            latest_scores.append(score)
+            avg_score_history.append(np.mean(latest_scores))
             score = 0
             s_cur = env.reset()
             s_prev = s_cur
@@ -124,11 +126,11 @@ for ep in range(N_episodes):
         net.train()
         minibatch_ids = np.random.choice(len(replay_buffer), Size_minibatch)
         minibatch = replay_buffer.get(minibatch_ids)
-        xs, actions, rs, next_xs = minibatch.values()
+        xs, actions, rs, next_xs, dones = minibatch.values()
         xs = torch.stack(xs).to(device)  # list of tensors -> tensor
         next_xs = torch.stack(next_xs).to(device)
         rs = np.array(rs)
-        final_state_ids = np.nonzero(rs == 0)  # will be needed to calculate targets for terminal states properly
+        final_state_ids = np.nonzero(dones)  # will be needed to calculate targets for terminal states properly
         rs = torch.from_numpy(rs).float()
 
         if method == 'double':
@@ -141,7 +143,7 @@ for ep in range(N_episodes):
             optimizer.zero_grad()
             Q = net(xs)
             Q_next_max, Q_next_argmax = torch.max(Q_next, 1)
-            Q_target = torch.gather(Q_next_, 1, Q_next_argmax.view(-1, 1)).squeeze()
+            V_next = torch.gather(Q_next_, 1, Q_next_argmax.view(-1, 1)).squeeze()
         else:
             # finding targets by vanilla method
             with torch.no_grad():
@@ -149,14 +151,14 @@ for ep in range(N_episodes):
             optimizer.zero_grad()
             Q = net(xs)
             Q_next_max, Q_next_argmax = torch.max(Q_next_, 1)
-            Q_target = Q_next_max
+            V_next = Q_next_max
 
-        Q_target[final_state_ids] = 0  # terminal states should have V(s) = max(Q(s,a)) = 0
-        targets = (rs.to(device) + gamma*Q_target).to(device)
+        V_next[final_state_ids] = 0  # terminal states should have V(s) = max(Q(s,a)) = 0
+        Q_target = (rs.to(device) + gamma*V_next).to(device)
         # backprop only on actions that actually occured at corresponding states
         actions = torch.tensor(actions).view(-1, 1)
         Q_relevant = torch.gather(Q, 1, actions.to(device)).squeeze()
-        loss = loss_function(Q_relevant, targets)
+        loss = loss_function(Q_relevant, Q_target)
         loss.backward()
         optimizer.step()
         running_loss = loss.item() if running_loss == 0 else 0.99*running_loss + 0.01*loss.item()
@@ -169,19 +171,22 @@ for ep in range(N_episodes):
             #     net.load_state_dict(net_.state_dict())  ## useless
         ep_played = ep + 1
         if done and ep_played % 100 == 0:
-            print("ep: {}, buf_len: {}, eps: {:.3f}, time: {:.2f}s, running_loss: {:.3f}, running_score: {:.1f}".
+            print("ep: {}, buf_len: {}, eps: {:.3f}, time: {:.2f}s, running_loss: {:.3f}, last 100 avg score: {:.1f}".
                   format(ep_played, len(replay_buffer), eps, time.time()-t0,
-                                                                           running_loss, running_score))
-        if done and ep_played % 100 == 0 and running_score > running_score_best:
+                                                                           running_loss, np.mean(latest_scores)))
+        if done and ep_played % 10 == 0 and np.mean(latest_scores) > avg_score_best:
             torch.save(net.state_dict(), net_save_path)
-            running_score_best = running_score
-            print("net saved to '{}'".format(net_save_path))
+            avg_score_best = np.mean(latest_scores)
+            if avg_score_best > Pass_score:
+                print('latest 100 average score: {}, pass score: {}, test is passed'.format(avg_score_best, Pass_score))
+                exit(0)
+            # print("net saved to '{}'".format(net_save_path))
 
         if done and ep_played % 100 == 0:
             plt.close('all')
-            plt.plot(running_score_history)
+            plt.plot(avg_score_history)
             plt.xlabel('episodes')
-            plt.ylabel('running score')
+            plt.ylabel('last 100 average score')
             plt.savefig(plot_save_path)
         if done:
             break
