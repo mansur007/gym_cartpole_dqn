@@ -7,12 +7,15 @@ DDQN - section 4.4
 
 **Training**  
 Training is not very stable  
-Successful training might be achieved in about 1-4 trials. So if training fails - please try again.  
-Passes both cartpole v0 and cartpole v1 with both DQN and DDQN during training.  
-Passing criterion for cartpole v0: average score on last 100 training episodes is above 195  
-Passing criterion for cartpole v1: average score on last 100 training episodes is above 475  
-**Plots for some successful training runs are given in the "plot" directory.  
-Codes will be  updated if more stable/quick training is achieved.**
+Successful training might be achieved in about 1-4 trials. If training fails - please try again.
+vanilla DQN training for v1 is the most unstable, others are reasonably stable.  
+Successful training is defined as follows:  
+Passing criterion for cartpole v0: average score on last 100 training episodes is above 199 (although 195 is the gym standard)  
+Passing criterion for cartpole v1: average score on last 100 training episodes is above 499 (although 475 is the gym standard)  
+<img src="plot/cartpole-v1_doubleDQN.png">  
+a plot for a sample DDQN training for cartpole v1  
+Plots for some other successful training runs are given in the "plot" directory.  
+Codes will be  updated if more stable/quick training is achieved.
 
 **Testing**  
 <img src="https://media.giphy.com/media/dv7EKfnjCwiTvqosmG/giphy.gif">  
