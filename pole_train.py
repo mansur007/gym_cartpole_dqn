@@ -46,10 +46,10 @@ plot_save_path = 'cartpole-v{}_{}DQN.png'.format(env_version, method)
 device = "cuda"
 if env_version == 1:
     T_max = 499  # latest step that environment allows, starting from 0
-    Pass_score = 475
+    Pass_score = 499  # usually 475
 elif env_version == 0:
     T_max = 199
-    Pass_score = 195
+    Pass_score = 199  # usually 195
 else:
     assert False, "wrong env_version, should be 0 or 1 (integer)"
 

@@ -6,7 +6,7 @@ import torch.nn.functional as F
 class Q_net(nn.Module):
     def __init__(self):
         super().__init__()
-        h = 64
+        h = 256
         self.fc1 = nn.Linear(8, h)
         self.fc2 = nn.Linear(h, h)
         # self.bn2 = nn.BatchNorm1d(h)
