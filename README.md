@@ -1,7 +1,7 @@
 # gym_cartpole_dqn
 **Pytorch Implementation of 2 types of DQN training: double DQN(DDQN) and vanilla DQN (DQN)**  
 You can find explanations of the networks, for example, in "An Introduction to Deep Reinforcement Learning"  
-by Vincent François-Lavet, Peter Henderson, Riashat Islam, Marc G. Bellemare and Joelle Pineau 5:  
+by Vincent François-Lavet, Peter Henderson, Riashat Islam, Marc G. Bellemare and Joelle Pineau:  
 DQN - section 4.3  
 DDQN - section 4.4
 
