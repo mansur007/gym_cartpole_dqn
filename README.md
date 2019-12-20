@@ -25,3 +25,4 @@ v1: always 500 (maximum limit of the environment is 500)
 
 **Input** to the network is 8x1 array [current state; current state - previous state], 
   where state is a 4x1 array returned by env.step(action)
+
